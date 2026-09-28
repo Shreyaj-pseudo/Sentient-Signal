@@ -1,0 +1,42 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# JavaScript
+node_modules/
+
+# Local runtime and test debris
+.runtime/
+.test-tmp/
+.pytest-run/
+pytest-cache-files-*/
+tmp/
+*.log
+
+# Raw and generated ML artifacts
+MELD.Raw/
+data/
+checkpoints/
+.cache/
+reports/*.json
+reports/*.jsonl
+
+# Local configuration and editor files
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Build output
+build/
+dist/
