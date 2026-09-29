@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SentientSignals</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main>
+      <section class="stage" aria-labelledby="title">
+        <div class="intro">
+          <p class="eyebrow">LOCAL · TEXT + AUDIO</p>
+          <h1 id="title">Say what’s<br>on your mind.</h1>
+          <p class="lede">Hold the button while you speak. The lamp listens, then responds with a short, grounded reflection.</p>
+        </div>
+
+        <div class="lamp-stage">
+          <svg id="lamp" class="lamp" viewBox="0 0 540 440" role="img" aria-label="Desk lamp is idle">
+            <defs>
+              <linearGradient id="metal" x1="0" x2="1">
+                <stop stop-color="#515c57"/><stop offset=".4" stop-color="#bcc6b6"/>
+                <stop offset=".6" stop-color="#8c9986"/><stop offset="1" stop-color="#424d45"/>
+              </linearGradient>
+              <linearGradient id="enamel" x1="0" y1="0" x2=".8" y2="1">
+                <stop stop-color="#d4dcc7"/><stop offset=".4" stop-color="#a6b398"/>
+                <stop offset="1" stop-color="#56654e"/>
+              </linearGradient>
+              <radialGradient id="pool">
+                <stop stop-color="#ffcc7b" stop-opacity=".28"/>
+                <stop offset="1" stop-color="#ffcc7b" stop-opacity="0"/>
+              </radialGradient>
+              <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1">
+                <stop stop-color="#ffdb91" stop-opacity=".18"/>
+                <stop offset="1" stop-color="#ffdb91" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <ellipse cx="278" cy="387" rx="158" ry="20" fill="#000" opacity=".3"/>
+            <ellipse id="light-pool" cx="180" cy="374" rx="158" ry="30" fill="url(#pool)"/>
+            <path d="M36 384 H502" stroke="#52594c" stroke-opacity=".35"/>
+            <path d="M220 370 Q214 392 174 393" stroke="#32382f" stroke-width="5" fill="none"/>
+            <path d="M230 367 Q232 344 294 344 Q355 344 360 367 L360 374 Q295 398 230 374Z" fill="url(#enamel)"/>
+            <ellipse cx="295" cy="367" rx="65" ry="16" fill="url(#metal)"/>
+            <ellipse cx="295" cy="367" rx="51" ry="11" fill="#78866d"/>
+            <g transform="translate(295 349)">
+              <g id="lower-arm">
+                <path d="M-9 0 V-127 M9 0 V-127" stroke="#303b31" stroke-width="8" stroke-linecap="round"/>
+                <path d="M-9 0 V-127 M9 0 V-127" stroke="url(#metal)" stroke-width="5" stroke-linecap="round"/>
+                <path d="M-5 -22 L5 -28 L-5 -34 L5 -40 L-5 -46 L5 -52 L-5 -58 L5 -64" stroke="#a8b09e" stroke-width="2" fill="none"/>
+                <g transform="translate(0 -127)">
+                  <g id="upper-arm">
+                    <path d="M-7 0 V-127 M7 0 V-127" stroke="#303b31" stroke-width="8" stroke-linecap="round"/>
+                    <path d="M-7 0 V-127 M7 0 V-127" stroke="url(#metal)" stroke-width="5" stroke-linecap="round"/>
+                    <path d="M-5 -20 L5 -26 L-5 -32 L5 -38 L-5 -44 L5 -50 L-5 -56 L5 -62" stroke="#a8b09e" stroke-width="2" fill="none"/>
+                    <g transform="translate(0 -127)">
+                      <circle r="11" fill="#505d49" stroke="#b7c1aa" stroke-width="3"/>
+                      <g id="lamp-head">
+                        <path d="M-100 28 L-165 215 L34 215 L-13 28Z" fill="url(#beam)" id="light-beam"/>
+                        <path d="M0 0 H-25" stroke="url(#metal)" stroke-width="12" stroke-linecap="round"/>
+                        <path d="M-104 26 Q-97 -17 -63 -27 Q-35 -32 -17 26Z" fill="url(#enamel)" stroke="#b5c1a6" stroke-width="1.5"/>
+                        <path d="M-85 -5 Q-76 -18 -64 -19" stroke="#e6ebdb" stroke-opacity=".55" stroke-width="3" stroke-linecap="round" fill="none"/>
+                        <ellipse cx="-60" cy="27" rx="45" ry="10" fill="#394536"/>
+                        <ellipse cx="-60" cy="28" rx="38" ry="6" fill="#ffdfa3" id="lamp-bulb"/>
+                      </g>
+                    </g>
+                  </g>
+                  <circle r="14" fill="url(#metal)" stroke="#35412e" stroke-width="2"/>
+                  <circle r="5" fill="#48563e"/><path d="M-3 0 H3" stroke="#aeb9a1" stroke-width="2"/>
+                </g>
+              </g>
+              <circle r="15" fill="url(#metal)" stroke="#35412e" stroke-width="2"/>
+              <circle r="6" fill="#48563e"/>
+            </g>
+          </svg>
+          <details class="gesture-preview">
+            <summary>Preview lamp gestures</summary>
+            <div class="gesture-buttons" aria-label="Lamp animation preview">
+              <button data-gesture="idle">Rest</button><button data-gesture="listening">Listen</button>
+              <button data-gesture="processing">Think</button><button data-gesture="acknowledgment">Nod</button>
+              <button data-gesture="celebration">Celebrate</button><button data-gesture="reassurance">Reassure</button>
+              <button data-gesture="clarification">Clarify</button><button data-gesture="error">Error</button>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="console" aria-live="polite">
+        <div class="status-row">
+          <span id="status-dot"></span>
+          <span id="status">Ready</span>
+          <span id="timer">00:00</span>
+        </div>
+        <button id="talk" type="button">Hold to talk</button>
+
+        <div class="divider"><span>or replay a prepared WAV</span></div>
+        <div class="replay-row">
+          <label class="file-label">Choose WAV<input id="replay" type="file" accept="audio/wav"></label>
+          <input id="supplied-text" type="text" placeholder="Optional supplied transcript" aria-label="Optional supplied transcript">
+          <button id="send-replay" type="button">Replay</button>
+        </div>
+
+        <article id="result" hidden>
+          <p class="label">HEARD</p>
+          <blockquote id="transcript"></blockquote>
+          <p class="label">RESPONSE</p>
+          <p id="response"></p>
+          <details>
+            <summary>Inspect prediction</summary>
+            <div id="inspection"></div>
+          </details>
+        </article>
+        <p id="error" role="alert"></p>
+      </section>
+    </main>
+    <script src="lamp.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
