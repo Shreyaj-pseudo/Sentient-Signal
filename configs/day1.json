@@ -1,0 +1,18 @@
+{
+  "sample_rate": 16000,
+  "text_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "audio_model": "facebook/wav2vec2-base",
+  "asr_model": "tiny.en",
+  "asr_compute_type": "int8",
+  "cpu_threads": 8,
+  "hidden_dimension": 128,
+  "dropout": 0.2,
+  "learning_rate": 0.001,
+  "weight_decay": 0.0001,
+  "batch_size": 64,
+  "max_epochs": 30,
+  "early_stopping_patience": 5,
+  "seed": 42,
+  "uncertain_max_probability": 0.55,
+  "uncertain_top_two_margin": 0.15
+}
