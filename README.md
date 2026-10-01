@@ -1,212 +1,223 @@
 # SentientSignals
 
-SentientSignals is a local, turn-level Text + Audio emotion prototype trained on the
-official MELD splits. Day 1 established the feasibility path. Day 2 adds the bounded
-WebSocket protocol, microphone/WAV replay interface, cancellable stale-result handling,
-calibration utilities, and the first animated lamp. See `plan.md` for the three-day scope.
+**Local speech understanding for emotionally legible robot behavior.**
 
-## Day 1 setup (PowerShell)
+SentientSignals is a real-time Text + Audio ML prototype that listens to a completed speech
+turn, estimates one of seven MELD emotions, and drives a small animated desk-lamp character.
+It runs locally: microphone capture, Whisper transcription, MiniLM and wav2vec2 features,
+classification, response selection, and animation.
+
+The project is intentionally more than a model notebook. It includes reproducible data
+preparation, split-safe experiments, uncertainty handling, a bounded WebSocket service,
+cancellable turns, an accessible browser interface, and measured test and latency results.
+
+![Eight authored lamp states](reports/lamp/pose-sheet.png)
+
+## Why I built it
+
+An expressive robot needs more than a label. It must perceive a person, respond quickly, and
+communicate its state without pretending to know more than it does. This prototype explores
+that complete loop with a lightweight lamp character:
+
+```text
+microphone / MELD replay
+          |
+   local Whisper ASR
+          |
+  +-------+-------+
+  |               |
+MiniLM         wav2vec2
+  |               |
+  +-------+-------+
+          |
+ calibrated probability fusion
+          |
+ uncertainty + grounded response policy
+          |
+ text response + interruptible lamp gesture
+```
+
+The lamp does not mirror negative emotions theatrically. It acknowledges, reassures, asks for
+clarification when confidence is low, and exposes the transcript and probabilities for
+inspection.
+
+## Live system
+
+- Push-to-talk microphone input and prepared-WAV replay.
+- Local `faster-whisper` `tiny.en` transcription.
+- Frozen `all-MiniLM-L6-v2` text and `wav2vec2-base` audio encoders.
+- Small PyTorch classification heads with training-only normalization.
+- Calibrated 85% text / 15% audio probability fusion.
+- Seven MELD emotions: anger, disgust, fear, joy, neutral, sadness, and surprise.
+- Confidence and top-two-margin uncertainty rules.
+- Deterministic, transcript-aware responses rather than open-ended generation.
+- Bounded 16 kHz PCM16 WebSocket transport with stale-turn cancellation.
+- Authored SVG lamp gestures with smooth interruption and reduced-motion support.
+- Entire deployed path: approximately 155 million learned parameters and 1.21 GB peak RSS.
+
+## Final measured results
+
+The configuration was selected on development dialogues before the official test labels were
+opened. The final test set contains 2,610 MELD utterances.
+
+| Model | Macro-F1 | Weighted F1 | Accuracy |
+|---|---:|---:|---:|
+| **Deployed text/audio fusion** | **0.4032** | **0.5707** | **57.20%** |
+| Text only | 0.4023 | 0.5648 | 56.32% |
+| Audio only | 0.2228 | 0.3856 | 38.05% |
+| Always neutral | 0.0928 | 0.3127 | 48.12% |
+
+The honest conclusion is that text carries nearly all useful predictive signal. The
+dialogue-bootstrap 95% confidence interval for fused-minus-text macro-F1 is
+`[-0.0088, 0.0096]`, and shuffling audio changes macro-F1 from `0.4032` to `0.4045`.
+This experiment does **not** establish a meaningful audio contribution.
+
+The uncertainty policy marks 66.6% of test examples uncertain. On the remaining 33.4%,
+accuracy is 78.1%, compared with 46.7% on uncertain examples. The policy therefore provides a
+useful behavior signal even though its thresholds are not a substitute for formal calibration.
+
+Full results, per-class metrics, confusion matrices, exclusions, and bootstrap details are in
+[`reports/day3_final_evaluation.json`](reports/day3_final_evaluation.json) and
+[`reports/day3_final_summary.md`](reports/day3_final_summary.md).
+
+## What I tried
+
+Every experiment used official MELD splits and development-only selection. Failed experiments
+were kept because they changed the engineering decision.
+
+| Experiment | Development macro-F1 | Decision |
+|---|---:|---|
+| Text only, inverse-sqrt class weights | 0.4226 | Strong unimodal baseline |
+| Initial 75% text probability fusion | 0.4230 | Tiny gain; refine weight only |
+| **Final 85% text probability fusion** | **0.4264** | Deployed; +0.0034 over initial fusion |
+| Three-seed ensemble | 0.4341 | Rejected: six heads for a small gain |
+| Generic wav2vec2 audio only | 0.2424 | Audio baseline |
+| IEMOCAP emotion encoder audio only | 0.2348 | Worse domain/label transfer |
+| 32-bin attentive temporal audio pooling | 0.2264 | Worse than mean/std pooling |
+| Explicit pitch, energy, rhythm, and pause features | 0.2511 audio | Better audio; fusion unchanged |
+| Text-led learned fusion gate | 0.4213 | Worse and more complex |
+| Three-turn context concatenated into MiniLM | 0.3096 | Context diluted the target utterance |
+
+A partial wav2vec2 fine-tuning run was also stopped after class collapse: epoch-one macro-F1
+was `0.1607`, with no disgust, fear, or sadness predictions. It was not deployed or treated as
+a completed comparable benchmark.
+
+These results prevented three common mistakes: assuming an emotion-specific encoder transfers
+between datasets, assuming fusion helps because both modalities are present, and adding model
+complexity without measured benefit.
+
+## Performance and constraints
+
+Measured locally on Windows 11, Python 3.12, an Intel Core Ultra 5 laptop, and CPU inference:
+
+| Measurement | Result |
+|---|---:|
+| Warm end-to-end p50 | 1.03 s |
+| Warm end-to-end p95 | 1.43 s |
+| Cold startup plus first result | 20.62 s |
+| Peak process RSS | 1.21 GB |
+| Learned parameters | 155,091,975 |
+| Whisper WER on the 30-clip feasibility benchmark | 46.9% |
+
+The latency includes WAV reading, local transcription, both encoders, classification, and the
+response policy. The high WER is retained as a limitation: short sitcom clips often contain
+overlapping voices and surrounding dialogue.
+
+## Engineering decisions
+
+- **Local inference:** predictable privacy and no network dependency after model download.
+- **Turn-level processing:** streaming input with inference after button release; not falsely
+  described as streaming classification.
+- **Split discipline:** official train/dev/test splits; whole development dialogues reserved
+  for calibration; test labels opened once after freezing the checkpoint.
+- **Shared preprocessing:** the same audio and feature code serves caching and runtime.
+- **Resumable caches:** keys include audio content, normalized transcript, preprocessing, and
+  pinned encoder revisions.
+- **Bounded work:** one active inference job, ten-second input cap, cancellation suppresses
+  stale results, and malformed or empty audio receives a safe retry response.
+- **Accessible motion:** gesture meaning is also expressed in text; reduced-motion users receive
+  static poses.
+- **Honest model selection:** the strongest result wins only when the measured improvement
+  justifies its runtime cost.
+
+The animated lamp is an original SVG/CSS rig. Its event-driven interruption model was informed
+by Human Computer Lab's public LeLamp runtime, but no visual identity, motion trajectory, or
+prompt was copied.
+
+## Run the final demo
+
+Python 3.12 is required.
 
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[encoders,dev]"
+python -m pip install -e ".[encoders,asr,serve,dev]"
+sentient-serve --checkpoint checkpoints/day3_deployed.pt
 ```
 
-Prepare manifests and WAV audio (raw files are never modified):
+Open `http://127.0.0.1:8000`, then hold the talk button or replay a prepared mono 16 kHz PCM16
+WAV. Encoder and ASR weights must be downloaded once before offline use.
+
+The interview-oriented walkthrough is in [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md).
+
+## Reproduce training and evaluation
+
+Raw MELD media and generated data are intentionally excluded from Git.
 
 ```powershell
-sentient-prepare --raw-root MELD.Raw --output-root data/processed
+# Prepare official splits and cache frozen representations
+sentient-prepare --output-root data/day2/processed --splits train dev test
+python scripts/day2_experiment.py --threads 8
+
+# Refine fusion on development selection data and freeze the artifact
+python scripts/day3_accuracy_experiment.py
+python scripts/day3_accuracy_experiment.py --apply
+
+# Open the official test labels once
+python scripts/day3_evaluate.py
 ```
 
-Run the representative 100-clip feasibility benchmark at a chosen CPU thread count:
+Additional experiment entry points:
 
 ```powershell
-sentient-benchmark --manifest data/processed/dev.jsonl --limit 100 --threads 4
+python scripts/audio_encoder_experiment.py --threads 8
+python scripts/attentive_audio_experiment.py --threads 8
+python scripts/prosody_experiment.py --threads 8
+python scripts/gated_fusion_experiment.py --threads 8
+python scripts/context_text_experiment.py --threads 8
 ```
 
-Cache Day 1 features, train a subset-labelled fusion head, and produce one JSON result:
-
-```powershell
-sentient-cache --manifest data/processed/train.jsonl --output data/features/day1_encoder_train_clean.npz --limit 300
-sentient-cache --manifest data/processed/dev.jsonl --output data/features/day1_encoder_dev_clean.npz --limit 100
-sentient-train --train-features data/features/day1_encoder_train_clean.npz --dev-features data/features/day1_encoder_dev_clean.npz --output checkpoints/day1_encoder_subset.pt
-sentient-predict --checkpoint checkpoints/day1_encoder_subset.pt --text "You tell them to wait!" --audio data/processed/dev/dia42_utt1.wav
-```
-
-Omit `--text` to run the complete local speech-to-response path:
-
-```powershell
-sentient-predict --checkpoint checkpoints/day1_encoder_subset.pt --audio data/processed/dev/dia42_utt1.wav --threads 8 --offline
-```
-
-`--offline` works after the three selected model checkpoints have been downloaded once.
-You can provide several paths after `--audio`; the process keeps every model loaded and
-prints one result per file, so only the first result pays the startup cost.
-
-`sentient-cache` uses frozen MiniLM and wav2vec2 by default. Model downloads are cached
-outside Git. Add `--feature-mode feasibility` only for a fast smoke test; those compact,
-deterministic features are not the planned final encoders and artifacts retain that label.
-
-The current checkpoint is deliberately a wiring/feasibility artifact trained on 300 clips;
-it is not the final model. Measured Day 1 results are in `reports/day1_summary.md`.
-
-Run validation with:
+## Validation
 
 ```powershell
 python -m pytest
 python -m ruff check .
-```
-
-## Day 2 live interface
-
-Install the serving dependencies and launch the local application:
-
-```powershell
-python -m pip install -e ".[encoders,asr,serve,dev]"
-sentient-serve --checkpoint checkpoints/day1_encoder_subset.pt
-```
-
-Open `http://127.0.0.1:8000`. Hold the button to record, or choose a mono 16 kHz PCM16
-WAV for replay. A replay may use an explicitly labelled supplied transcript; otherwise it
-uses local ASR. The current checkpoint remains the Day 1 subset feasibility artifact until
-the full Day 2 comparison is trained and selected.
-
-Train an individual Day 2 comparison head while reserving 20% of whole development
-dialogues for calibration:
-
-```powershell
-sentient-train --train-features data/features/train.npz --dev-features data/features/dev.npz --modality text --class-weighting inverse_sqrt --seed 42 --output checkpoints/text_weighted_seed42.pt
-sentient-train --train-features data/features/train.npz --dev-features data/features/dev.npz --modality audio --class-weighting none --seed 42 --output checkpoints/audio_plain_seed42.pt
-sentient-train --train-features data/features/train.npz --dev-features data/features/dev.npz --modality fusion --class-weighting inverse_sqrt --seed 42 --output checkpoints/fusion_weighted_seed42.pt
-```
-
-Repeat selection runs with seeds `13`, `42`, and `2026`. Do not pass
-`--include-calibration` for Day 2 selection; that flag only reproduces the earlier feasibility
-behavior.
-
-### Full Day 2 experiment
-
-Full-run data is separate from the Day 1 subset. Run these commands from the repository root:
-
-```powershell
-sentient-prepare --output-root data/day2/processed --splits train dev test
-python scripts/day2_experiment.py --threads 8
-```
-
-Feature shards resume automatically and include audio content, transcript, encoder revisions,
-and preprocessing in their cache identity. The runner trains 18 heads (three modalities, two
-losses, three seeds), compares probability fusion weights on selection dialogues, and fits
-temperature on the reserved calibration dialogues. Test representations are cached after model
-selection; test metrics remain reserved for Day 3.
-
-Progress is written to `reports/day2_live_status.json`, comparisons to
-`reports/day2_experiment.json`, and the calibrated deployment artifact to
-`checkpoints/day2/deployed.pt`. Once the run finishes, launch it explicitly:
-
-```powershell
-sentient-serve --checkpoint checkpoints/day2/deployed.pt
-```
-
-Run the completeness check with `python scripts/check_day2.py`. It validates official clip
-identities, WAVs, feature alignment, all 18 heads, training-only normalization, the calibration
-split, and real-clip offline inference. Results go to `reports/day2_completeness.json`.
-The full prepared set contains 9,988 train / 1,108 dev / 2,610 test clips: training
-`dia125_utt3.mp4` is corrupt (PyAV `InvalidDataError`), and development `dia110_utt7.mp4`
-is missing. Both exclusions are recorded in `reports/data_preparation.json`.
-
-### Lamp verification
-
-Reload the page and expand **Preview lamp gestures** to try each animation without a microphone
-or inference. The SVG uses connected arm joints, a stationary base, and an independently
-controlled shade. New states interrupt smoothly; response gestures settle back to rest.
-Reduced-motion preferences use static poses.
-
-```powershell
 npm ci
 npm run test:lamp
 npm run render:lamp
 ```
 
-`reports/lamp/pose-sheet.png` shows eight rendered poses from the actual rig. These are SVG
-renders, not browser screenshots. Desktop/mobile layout and motion timing still require a
-browser inspection; the animation tests check interpolation, interruption, and reduced motion.
+The data audit verified 13,706 prepared clips: 9,988 train, 1,108 development, and 2,610 test.
+One corrupt training video and one missing development video are explicitly recorded in
+[`reports/data_preparation.json`](reports/data_preparation.json).
 
-## Emotion-trained audio comparison
+## Repository map
 
-Compare the Day 2 speech representation with an IEMOCAP-trained SUPERB wav2vec2 emotion
-representation. The experiment reuses the existing text cache, extracts resumable audio
-features, and trains audio-only and feature-fusion heads across both losses and all three seeds:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-python scripts/audio_encoder_experiment.py --threads 8
+```text
+src/sentient_signals/  preprocessing, models, inference, policy, service
+app/static/            microphone/replay UI and animated SVG lamp
+scripts/               experiments, evaluation, and verification
+tests/                 unit and integration tests
+configs/               reproducible settings
+reports/               measured outputs and rendered QA artifacts
 ```
 
-Results are written to `reports/audio_encoder_experiment.json`. Re-run only the heads with
-`python scripts/audio_encoder_experiment.py --threads 8 --compare-only`. The experiment keeps
-`checkpoints/day2/deployed.pt` unchanged until the new representation proves better.
-After the heads exist, re-run only the probability-fusion comparison with
-`python scripts/audio_encoder_experiment.py --threads 8 --probability-only`.
+## Limitations and next steps
 
-## Day 3 accuracy selection
-
-Search finer text/audio fusion weights on the development selection dialogues only:
-
-```powershell
-python scripts/day3_accuracy_experiment.py
-```
-
-Review `reports/day3_accuracy_experiment.json`, then freeze the recommended seed-42 artifact
-without opening test labels:
-
-```powershell
-python scripts/day3_accuracy_experiment.py --apply
-```
-
-This also reports a three-seed ensemble comparison, but does not deploy it because it loads six
-heads for a smaller system-level tradeoff. Test evaluation remains a separate final step.
-
-### Attentive audio pooling
-
-Preserve 32 temporal audio bins and learn which parts of each utterance carry emotion:
-
-```powershell
-python scripts/attentive_audio_experiment.py --threads 8
-```
-
-Feature extraction is resumable. After the cache exists, retrain only the small attention heads
-with `python scripts/attentive_audio_experiment.py --threads 8 --compare-only`. Results are
-written to `reports/attentive_audio_experiment.json`; the Day 3 checkpoint is not replaced.
-
-### Explicit prosody experiment
-
-Append dependency-free pitch, energy, rhythm, voicing, and spectral features to the existing
-wav2vec cache, then train audio and feature-fusion heads:
-
-```powershell
-python scripts/prosody_experiment.py --threads 8
-```
-
-Prosody caching resumes per clip. Retrain without recaching using
-`python scripts/prosody_experiment.py --threads 8 --compare-only`. Results are written to
-`reports/prosody_experiment.json`; no deployment artifact is replaced automatically.
-
-Train a text-led dynamic gate using the cached prosody features:
-
-```powershell
-python scripts/gated_fusion_experiment.py --threads 8
-```
-
-Results are written to `reports/gated_fusion_experiment.json`; the current deployment remains
-unchanged until the three-seed development mean beats the Day 3 baseline.
-
-### Final test evaluation
-
-After freezing the Day 3 checkpoint, run the one-shot cached MELD test evaluation:
-
-```powershell
-python scripts/day3_evaluate.py
-```
-
-This writes `reports/day3_final_evaluation.json` and `reports/day3_final_summary.md`.
+- MELD is imbalanced, acted sitcom dialogue; live speech is a domain shift.
+- Audio did not demonstrate statistically reliable value in the selected architecture.
+- The prototype has no visual perception, speaker diarization, or physical actuator control.
+- Conversation context needs per-turn sequence modeling; concatenating turns into one sentence
+  embedding failed.
+- The next hardware step is to replace the SVG gesture sink with a motor-controller adapter
+  while preserving the existing prediction/policy/animation boundary.
